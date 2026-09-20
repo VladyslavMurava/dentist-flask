@@ -1,0 +1,38 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Перевірка коду
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Встановлення залежностей
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Компіляція модулів
+        run: python -m compileall -q app.py ai.py
+
+      - name: Тести
+        run: pytest -q
+
+  deploy:
+    name: Розгортання на Render
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Виклик Deploy Hook
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"

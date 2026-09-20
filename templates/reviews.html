@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Відгуки пацієнтів — Доктор Ковальчук{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-text">
+        <h1>Відгуки пацієнтів</h1>
+        <p>Кожен відгук автоматично аналізує модель штучного інтелекту й визначає його тональність.</p>
+    </div>
+</section>
+
+<section class="layout">
+    <div class="card form-card">
+        <h2>Залишити відгук</h2>
+        <form method="post" action="{{ url_for('add_review') }}" class="form">
+            <label>
+                Ваше ім'я
+                <input type="text" name="author" placeholder="Як до вас звертатися" required>
+            </label>
+            <label>
+                Відгук
+                <textarea name="text" rows="5" placeholder="Розкажіть про свій візит" required></textarea>
+            </label>
+            <button type="submit" class="btn">Надіслати відгук</button>
+        </form>
+        <p class="note">Аналіз виконує модель <code>{{ model }}</code> через Hugging Face Inference API.</p>
+    </div>
+
+    <div class="card">
+        <h2>Розподіл тональності</h2>
+        <canvas id="sentimentChart" height="220"></canvas>
+        <div class="stats">
+            <div class="stat stat-positive"><strong>{{ stats.positive }}</strong><span>позитивних</span></div>
+            <div class="stat stat-neutral"><strong>{{ stats.neutral }}</strong><span>нейтральних</span></div>
+            <div class="stat stat-negative"><strong>{{ stats.negative }}</strong><span>негативних</span></div>
+        </div>
+    </div>
+</section>
+
+<div class="card">
+    <h2>Усі відгуки ({{ reviews|length }})</h2>
+    {% if reviews %}
+    <div class="table-wrap">
+        <table class="table">
+            <tr>
+                <th>№</th>
+                <th>Автор</th>
+                <th>Відгук</th>
+                <th>Тональність</th>
+                <th>Упевненість</th>
+                <th>Дата</th>
+            </tr>
+            {% for r in reviews %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.author }}</td>
+                <td>{{ r.text }}</td>
+                <td><span class="badge badge-{{ r.sentiment or 'unknown' }}">{{ r.label }}</span></td>
+                <td>{% if r.score is not none %}{{ (r.score * 100)|round|int }} %{% else %}—{% endif %}</td>
+                <td>{{ r.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% else %}
+    <p class="empty">Відгуків ще немає — ваш буде першим.</p>
+    {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('sentimentChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Позитивні', 'Нейтральні', 'Негативні'],
+        datasets: [{
+            data: [{{ stats.positive }}, {{ stats.neutral }}, {{ stats.negative }}],
+            backgroundColor: ['#0f7b72', '#c9a227', '#b3261e'],
+            borderWidth: 0
+        }]
+    },
+    options: {
+        plugins: { legend: { position: 'bottom' } },
+        cutout: '60%'
+    }
+});
+</script>
+{% endblock %}

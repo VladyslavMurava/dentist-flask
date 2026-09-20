@@ -5,6 +5,8 @@ import psycopg2
 import psycopg2.extras
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 
+from ai import MODEL, analyze_sentiment, label_uk
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
 app.json.ensure_ascii = False
@@ -33,6 +35,16 @@ def init_db():
                 service_id INTEGER NOT NULL REFERENCES services(id),
                 visit_date DATE NOT NULL,
                 comment TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS reviews (
+                id SERIAL PRIMARY KEY,
+                author VARCHAR(100) NOT NULL,
+                text TEXT NOT NULL,
+                sentiment VARCHAR(20),
+                score NUMERIC(5, 4),
                 created_at TIMESTAMP NOT NULL DEFAULT NOW()
             )
         """)
@@ -131,6 +143,82 @@ def api_appointments():
 @app.route("/api/services")
 def api_services():
     return jsonify(fetch_services())
+
+
+@app.route("/reviews")
+def reviews():
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, author, text, sentiment, score, created_at
+            FROM reviews
+            ORDER BY created_at DESC
+        """)
+        rows = cur.fetchall()
+        cur.execute("""
+            SELECT sentiment, COUNT(*) AS n
+            FROM reviews
+            GROUP BY sentiment
+        """)
+        counts = {r["sentiment"]: r["n"] for r in cur.fetchall()}
+    stats = {
+        "positive": counts.get("positive", 0),
+        "neutral": counts.get("neutral", 0),
+        "negative": counts.get("negative", 0),
+        "unknown": counts.get(None, 0),
+    }
+    for row in rows:
+        row["label"] = label_uk(row["sentiment"])
+    return render_template("reviews.html", reviews=rows, stats=stats, model=MODEL)
+
+
+@app.route("/reviews", methods=["POST"])
+def add_review():
+    author = request.form.get("author", "").strip()
+    text = request.form.get("text", "").strip()
+    if not author or not text:
+        flash("Вкажіть ім'я та текст відгуку.", "error")
+        return redirect(url_for("reviews"))
+
+    sentiment, score = analyze_sentiment(text)
+
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO reviews (author, text, sentiment, score) VALUES (%s, %s, %s, %s)",
+            (author, text, sentiment, score),
+        )
+
+    if sentiment:
+        flash(f"Дякуємо, {author}! Відгук збережено. Модель визначила тональність: "
+              f"{label_uk(sentiment)} ({score:.0%}).", "success")
+    else:
+        flash(f"Дякуємо, {author}! Відгук збережено, але сервіс аналізу зараз недоступний.", "error")
+    return redirect(url_for("reviews"))
+
+
+@app.route("/api/reviews")
+def api_reviews():
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, author, text, sentiment, score, created_at FROM reviews ORDER BY id")
+        rows = cur.fetchall()
+    for row in rows:
+        row["score"] = float(row["score"]) if row["score"] is not None else None
+        row["created_at"] = row["created_at"].isoformat()
+    return jsonify(rows)
+
+
+@app.route("/api/reviews/stats")
+def api_reviews_stats():
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT sentiment, COUNT(*) AS n, ROUND(AVG(score), 4) AS avg_score
+            FROM reviews
+            GROUP BY sentiment
+            ORDER BY sentiment
+        """)
+        rows = cur.fetchall()
+    for row in rows:
+        row["avg_score"] = float(row["avg_score"]) if row["avg_score"] is not None else None
+    return jsonify({"model": MODEL, "stats": rows})
 
 
 init_db()
