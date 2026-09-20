@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-text">
+        <h1>Запис на прийом</h1>
+        <p>Оберіть послугу та зручну дату — ми зателефонуємо, щоб підтвердити час візиту.</p>
+    </div>
+</section>
+
+<section class="layout">
+    <div class="card form-card">
+        <h2>Форма запису</h2>
+        <form method="post" action="{{ url_for('book') }}" class="form">
+            <label>
+                Ім'я та прізвище
+                <input type="text" name="patient_name" placeholder="Як до вас звертатися" required>
+            </label>
+            <label>
+                Телефон
+                <input type="tel" name="phone" placeholder="+38 (0__) ___-__-__" required>
+            </label>
+            <label>
+                Послуга
+                <select name="service_id" required>
+                    {% for s in services %}
+                        <option value="{{ s.id }}">{{ s.name }}{% if s.price %} — {{ s.price }} грн{% else %} — безкоштовно{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Бажана дата візиту
+                <input type="date" name="visit_date" min="{{ today }}" required>
+            </label>
+            <label>
+                Коментар
+                <textarea name="comment" rows="3" placeholder="Що вас турбує або побажання щодо часу"></textarea>
+            </label>
+            <button type="submit" class="btn">Надіслати заявку</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Послуги та ціни</h2>
+        <table class="table">
+            <tr><th>Послуга</th><th>Вартість</th></tr>
+            {% for s in services %}
+            <tr>
+                <td>{{ s.name }}</td>
+                <td>{% if s.price %}{{ s.price }} грн{% else %}безкоштовно{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <p class="note">Точна вартість визначається після огляду.</p>
+        <h3>Контакти</h3>
+        <p>м. Хмельницький, вул. Проскурівська, 45, каб. 12<br>
+           Пн–Пт 9:00–19:00, Сб 10:00–15:00<br>
+           +38 (097) 123-45-67</p>
+    </div>
+</section>
+{% endblock %}
